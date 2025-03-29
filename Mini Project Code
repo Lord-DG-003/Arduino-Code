@@ -1,0 +1,138 @@
+#include <WiFi.h>
+#include <LiquidCrystal.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// LCD Connections (4-bit mode)
+#define RS_PIN 5
+#define EN_PIN 18
+#define D4_PIN 19
+#define D5_PIN 21
+#define D6_PIN 22
+#define D7_PIN 23
+LiquidCrystal lcd(RS_PIN, EN_PIN, D4_PIN, D5_PIN, D6_PIN, D7_PIN);
+
+// Temperature Sensor
+#define TEMP_PIN 25
+OneWire oneWire(TEMP_PIN);
+DallasTemperature sensors(&oneWire);
+
+// Ultrasonic Sensor
+#define TRIG_PIN 4
+#define ECHO_PIN 2
+#define TANK_HEIGHT 30  // cm
+
+// Current Sensor
+#define CURRENT_PIN 32
+#define MV_PER_AMP 100
+
+// Voltage Divider
+#define VOLTAGE_PIN 35
+#define R1 47000.0
+#define R2 10000.0
+
+// WiFi/MQTT Settings
+const char* ssid = "ABCDEFGHI";
+const char* password = "12345678";
+const char* mqtt_server = "io.adafruit.com";
+const int mqtt_port = 1883;
+const char* mqtt_user = "Abcdefghi_123";
+const char* mqtt_key = "aio_yUFq50H1pi3aSqrlZaiObrRJm";
+
+WiFiClient espClient;
+unsigned long lastMsgTime = 0;
+const long refreshInterval = 5000; // 5 seconds
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Initialize LCD
+  lcd.begin(16, 2);
+  lcd.print("Initializing...");
+  
+  // Initialize sensors
+  sensors.begin();
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  
+  // Connect to WiFi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    lcd.setCursor(0, 1);
+    lcd.print("Connecting WiFi");
+  }
+  
+  lcd.clear();
+  lcd.print("WiFi Connected!");
+  delay(1000);
+}
+
+void loop() {
+  // Read sensors
+  sensors.requestTemperatures();
+  float celsius = sensors.getTempCByIndex(0);
+  
+  float level = readUltrasonic();
+  float voltage = readVoltage();
+  float current = readCurrent();
+
+  // Display on LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("I:");
+  lcd.print(current, 1);
+  lcd.print("mA V:");
+  lcd.print(voltage, 1);
+  lcd.print("V");
+  
+  lcd.setCursor(0, 1);
+  lcd.print("T:");
+  lcd.print(celsius, 1);
+  lcd.print("C L:");
+  lcd.print(level, 0);
+  lcd.print("%");
+
+  // MQTT publish every refreshInterval
+  if (millis() - lastMsgTime > refreshInterval) {
+    lastMsgTime = millis();
+    publishMQTT(current, voltage, celsius, level);
+  }
+}
+
+float readUltrasonic() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  float distance = (duration * 0.034 / 2) - 3;
+  distance = constrain(distance, 0, TANK_HEIGHT);
+  return 100 - ((distance / TANK_HEIGHT) * 100);
+}
+
+float readCurrent() {
+  float vpp = 0;
+  for (int i = 0; i < 100; i++) {
+    vpp += (analogRead(CURRENT_PIN) * (3.3 / 4095.0);
+  }
+  vpp /= 100;
+  return (vpp * 1000) / MV_PER_AMP;
+}
+
+float readVoltage() {
+  float sensorValue = analogRead(VOLTAGE_PIN);
+  return (sensorValue * (3.3 / 4095.0) * ((R1 + R2) / R2)) * 0.1475;
+}
+
+void publishMQTT(float current, float voltage, float temp, float level) {
+  // Implement your MQTT publishing logic here
+  // This is simplified - you'll need to add your actual MQTT client code
+  Serial.print("Publishing: ");
+  Serial.print(current); Serial.print("mA, ");
+  Serial.print(voltage); Serial.print("V, ");
+  Serial.print(temp); Serial.print("C, ");
+  Serial.print(level); Serial.println("%");
+}
