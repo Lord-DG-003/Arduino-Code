@@ -1,7 +1,6 @@
 #include <WiFi.h>
 #include <LiquidCrystal.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
+#include <DHT.h>  // Replace DallasTemperature with DHT library
 
 // LCD Connections (4-bit mode)
 #define RS_PIN 5
@@ -12,10 +11,10 @@
 #define D7_PIN 23
 LiquidCrystal lcd(RS_PIN, EN_PIN, D4_PIN, D5_PIN, D6_PIN, D7_PIN);
 
-// Temperature Sensor
-#define TEMP_PIN 25
-OneWire oneWire(TEMP_PIN);
-DallasTemperature sensors(&oneWire);
+// DHT11 Sensor
+#define DHTPIN 25      // Connect DHT11 data pin to GPIO 25
+#define DHTTYPE DHT11  // Sensor type
+DHT dht(DHTPIN, DHTTYPE);
 
 // Ultrasonic Sensor
 #define TRIG_PIN 4
@@ -50,8 +49,10 @@ void setup() {
   lcd.begin(16, 2);
   lcd.print("Initializing...");
   
-  // Initialize sensors
-  sensors.begin();
+  // Initialize DHT11
+  dht.begin();
+  
+  // Initialize Ultrasonic Sensor
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   
@@ -69,10 +70,11 @@ void setup() {
 }
 
 void loop() {
-  // Read sensors
-  sensors.requestTemperatures();
-  float celsius = sensors.getTempCByIndex(0);
+  // Read DHT11 (Temperature & Humidity)
+  float humidity = dht.readHumidity();
+  float celsius = dht.readTemperature();
   
+  // Read other sensors
   float level = readUltrasonic();
   float voltage = readVoltage();
   float current = readCurrent();
@@ -89,14 +91,14 @@ void loop() {
   lcd.setCursor(0, 1);
   lcd.print("T:");
   lcd.print(celsius, 1);
-  lcd.print("C L:");
-  lcd.print(level, 0);
+  lcd.print("C H:");
+  lcd.print(humidity, 0);
   lcd.print("%");
 
   // MQTT publish every refreshInterval
   if (millis() - lastMsgTime > refreshInterval) {
     lastMsgTime = millis();
-    publishMQTT(current, voltage, celsius, level);
+    publishMQTT(current, voltage, celsius, humidity, level);
   }
 }
 
@@ -127,12 +129,12 @@ float readVoltage() {
   return (sensorValue * (3.3 / 4095.0) * ((R1 + R2) / R2)) * 0.1475;
 }
 
-void publishMQTT(float current, float voltage, float temp, float level) {
+void publishMQTT(float current, float voltage, float temp, float humidity, float level) {
   // Implement your MQTT publishing logic here
-  // This is simplified - you'll need to add your actual MQTT client code
   Serial.print("Publishing: ");
   Serial.print(current); Serial.print("mA, ");
   Serial.print(voltage); Serial.print("V, ");
   Serial.print(temp); Serial.print("C, ");
+  Serial.print(humidity); Serial.print("%, ");
   Serial.print(level); Serial.println("%");
 }
