@@ -118,7 +118,7 @@ float readUltrasonic() {
 float readCurrent() {
   float vpp = 0;
   for (int i = 0; i < 100; i++) {
-    vpp += (analogRead(CURRENT_PIN) * (3.3 / 4095.0);
+    vpp += (analogRead(CURRENT_PIN) * (3.3 / 4095.0));
   }
   vpp /= 100;
   return (vpp * 1000) / MV_PER_AMP;
